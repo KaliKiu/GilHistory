@@ -201,7 +201,7 @@ public unsafe class SqliteDataProvider : DataProviderBase
             using var db = new GilsightQueryFactory();
             var minTime = trades.Min(x => x.UnixTimeSeconds);
             var existing = GetRetainerHistory(minTime);
-            PluginLog.Information($"ExistingCnt: {existing}");
+            //PluginLog.Information($"ExistingCnt: {existing}");
             foreach(var x in trades)
             {
                 var desc = new RetainerSaleDescriptor()

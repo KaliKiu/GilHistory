@@ -12,4 +12,5 @@ public static class ServiceManager
     public static WorkerThread WorkerThread;
     public static TradeOverlay TradeOverlay;
     public static CashflowFileDialogManager CashflowFileDialogManager;
+    public static IpcProvider IpcProvider;
 }

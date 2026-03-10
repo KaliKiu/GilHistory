@@ -28,8 +28,8 @@ public unsafe class MemoryManager
     {
         try
         {
-            PluginLog.Information($"{a1},{a2},{a3},{a4}");
-            PluginLog.Information($"{(nint)AgentMerchantSettingInfo.Instance()}");
+            //PluginLog.Information($"{a1},{a2},{a3},{a4}");
+            //PluginLog.Information($"{(nint)AgentMerchantSettingInfo.Instance()}");
             if(a2 == 6079 || a2 == 6080)
             {
                 for(var i = 0; i < S.EventWatcher.LastMerchantInfo.Data.ItemsSpan.Length; i++)
@@ -184,14 +184,14 @@ public unsafe class MemoryManager
     {
         try
         {
-            PluginLog.Debug(MemoryHelper.ReadRaw(data, 8).ToHexString());
+            //PluginLog.Debug(MemoryHelper.ReadRaw(data, 8).ToHexString());
             List<RetainerHistoryData> list = [];
             for(var i = 0; i < 20; i++)
             {
                 var rec = *(RetainerHistoryData*)(data + 8 + sizeof(RetainerHistoryData) * i);
                 if(rec.ItemID == 0) break;
                 list.Add(rec);
-                PluginLog.Information($"""
+                /*PluginLog.Information($"""
                     ====== ProcessRetainerHistoryDetour ({i}) ======
                     {nameof(rec.ItemID)} = {ExcelItemHelper.GetName(rec.ItemID)}
                     {nameof(rec.Price)} = {rec.Price:N0}
@@ -202,7 +202,7 @@ public unsafe class MemoryManager
                     {nameof(rec.Unk17)} = {rec.Unk17}
                     {nameof(rec.UnixTimeSeconds)} = {rec.UnixTimeSeconds} / {DateTimeOffset.FromUnixTimeSeconds(rec.UnixTimeSeconds)}
                     ============
-                    """);
+                    """);*/
             }
             if(list.Count > 0)
             {

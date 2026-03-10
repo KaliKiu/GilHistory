@@ -38,7 +38,7 @@ public unsafe class EventWatcher : IDisposable
 
     private void OnMerchantShopFinalize(AddonEvent type, AddonArgs args)
     {
-        PluginLog.Information($"Finalize");
+        //PluginLog.Information($"Finalize");
     }
 
     private void OnMerchantShopUpdate(AddonEvent type, AddonArgs args)
