@@ -17,7 +17,7 @@ public class IpcProvider
     [EzIPC]
     public List<GilRecordSqlDescriptor> GetGilRecords(long unixTimeMsMin, long unixTimeMsMax)
     {
-        return P.DataProvider.GetGilRecords(unixTimeMsMin, unixTimeMsMax);
+        return P.DataProvider.GetGilTimelineRecords(unixTimeMsMin, unixTimeMsMax);
     }
 
     [EzIPC]

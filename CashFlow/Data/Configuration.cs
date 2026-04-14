@@ -12,6 +12,15 @@ public class Configuration : IEzConfig
     public bool ShowTradeOverlay = false;
     public bool ReverseArrows = false;
     public bool ReverseDayMonth = true;
+    public int GilRecordIntervalSeconds = 120;
+    public bool EnableSpendGilAlert = true;
+    public string SpendGilAlertText = "!!! you spend gil !!!";
+    public bool ShowSpendAmountInAlert = true;
+    public string SpendGilAlertImagePath = "";
+    public bool EnableSpendGilFullscreenFlash = true;
+    public int SpendGilFlashDurationMs = 1000;
+    public bool EnableSpendGilSound = false;
+    public string SpendGilSoundPath = "";
     public bool UseUTCTime = false;
     public bool UseCustomTimeFormat = false;
     public string CustomTimeFormat = "MM.dd.yyyy HH:mm";

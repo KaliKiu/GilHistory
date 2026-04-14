@@ -1,11 +1,11 @@
 {
-    "Author": "NightmareXIV, Asuna, Klia",
-    "Name": "CashFlow",
-    "InternalName": "CashFlow",
-    "Description": "CashFlow is a plugin that will log your trades, sales and purchases.",
+    "Author": "(KaliKiu),NightmareXIV, Asuna, Klia",
+    "Name": "GilHistory",
+    "InternalName": "GilHistory",
+    "Description": "SupaHotFia",
     "ApplicableVersion": "any",
-    "Punchline": "CashFlow is a plugin that will log your trades, sales and purchases.",
-    "RepoUrl": "https://github.com/NightmareXIV/CashFlow",
+    "Punchline": "SupaHotFia",
+    "RepoUrl": "https://github.com/KaliKiu/GilHistory",
     "AcceptsFeedback": false,
     "IconUrl": ""
 }

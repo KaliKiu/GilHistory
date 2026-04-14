@@ -1,8 +1,8 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project Sdk="Microsoft.NET.Sdk">
     <PropertyGroup>
-        <Authors>NightmareXIV, Asuna, Klia</Authors>
-        <Version>1.0.2.11</Version>
+        <Authors>KaliKiu</Authors>
+        <Version>1.0</Version>
         <Configurations>Debug;Release</Configurations>
     </PropertyGroup>
 
@@ -38,6 +38,7 @@
         <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.1" />
         <PackageReference Include="SqlKata" Version="4.0.1" />
         <PackageReference Include="SqlKata.Execution" Version="4.0.1" />
+        <PackageReference Include="System.Windows.Extensions" Version="10.0.6" />
     </ItemGroup>
 
     <ItemGroup>

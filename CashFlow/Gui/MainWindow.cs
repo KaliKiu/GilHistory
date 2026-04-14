@@ -3,33 +3,18 @@ using CashFlow.Gui.Components;
 using ECommons.ChatMethods;
 using ECommons.Funding;
 using ECommons.SimpleGui;
-using ECommons.Throttlers;
-using NightmareUI;
 
 namespace CashFlow.Gui;
 public unsafe class MainWindow : ConfigWindow
 {
     public volatile Dictionary<ulong, Sender> CIDMap = [];
-    public TabTradeLog TabTradeLog = new();
-    public TabRetainerSales TabRetainerSales = new();
-    public TabShopPurchases TabShopPurchases = new();
-    public TabNpcPurchases TabNpcPurchases = new();
-    public TabNpcSales TabNpcSales = new();
     public TabGilHistory TabGilHistory = new();
     public DateTime DateGraphStart = DateTimeOffset.FromUnixTimeSeconds(C.GraphStartDate).ToLocalTime().DateTime;
     public string DateGraphStartStr = DateTimeOffset.FromUnixTimeSeconds(C.GraphStartDate).ToLocalTime().DateTime.ToString(DateWidget.DateFormat);
 
     public void UpdateData(bool forced)
     {
-        if(FrameThrottler.Check("UpdateBlocked") || forced)
-        {
-            TabTradeLog.NeedsUpdate = true;
-            TabRetainerSales.NeedsUpdate = true;
-            TabShopPurchases.NeedsUpdate = true;
-            TabNpcPurchases.NeedsUpdate = true;
-            TabNpcSales.NeedsUpdate = true;
-            TabGilHistory.NeedsUpdate = true;
-        }
+        TabGilHistory.NeedsUpdate = true;
     }
 
     private MainWindow()
@@ -41,43 +26,55 @@ public unsafe class MainWindow : ConfigWindow
     {
         PatreonBanner.DrawRight();
         ImGuiEx.EzTabBar("tabs", PatreonBanner.Text, [
-            ("Trade Log", TabTradeLog.Draw, null, true),
-            ("Purchase Log", TabShopPurchases.Draw, null, true),
-            ("Sale Log", TabRetainerSales.Draw, null, true),
-            ("NPC Sale Log", TabNpcSales.Draw, null, true),
-            ("NPC Purchase Log", TabNpcPurchases.Draw, null, true),
             ("Gil History", TabGilHistory.Draw, null, true),
             ("Settings", DrawSettings, null, true),
-            ("Debug", TabDebug.Draw, ImGuiColors.DalamudGrey3, true),
             ]);
     }
 
     void DrawSettings()
     {
-        NuiTools.ButtonTabs([[new("General", DrawSettingsGeneral), new("Exclusions", TabExclusions.Draw)]]);
+        DrawSettingsGeneral();
     }
 
     private void DrawSettingsGeneral()
     {
         ImGui.SetNextItemWidth(150);
         ImGuiEx.SliderInt("Records per page", ref C.PerPage, 1000, 10000);
-        ImGui.Checkbox("Merge sequential gil-only trades with the same player into one", ref C.MergeTrades);
-        ImGuiEx.HelpMarker("Does not affects how trades are stored in database, only affects view");
-        ImGui.Indent();
-        ImGui.SetNextItemWidth(100);
-        ImGui.SliderInt($"Time limit for merging trades, minutes", ref C.MergeTradeTreshold, 1, 10);
-        ImGui.Unindent();
-        ImGui.Checkbox("Change arrows directions", ref C.ReverseArrows);
+        ImGui.SetNextItemWidth(220);
+        if(ImGui.SliderInt("Gil capture interval (seconds)", ref C.GilRecordIntervalSeconds, 5, 600))
+        {
+            C.GilRecordIntervalSeconds = Math.Clamp(C.GilRecordIntervalSeconds, 5, 3600);
+        }
+        ImGuiEx.HelpMarker("How often gil is sampled while the plugin is running.");
+        ImGui.Separator();
+        ImGui.Checkbox("Alert when gil is spent", ref C.EnableSpendGilAlert);
+        if(C.EnableSpendGilAlert)
+        {
+            ImGui.Indent();
+            ImGui.Checkbox("Show spent amount in alert", ref C.ShowSpendAmountInAlert);
+            ImGui.Checkbox("Full-screen flash on spend", ref C.EnableSpendGilFullscreenFlash);
+            ImGui.SetNextItemWidth(220);
+            if(ImGui.SliderInt("Flash duration (ms)", ref C.SpendGilFlashDurationMs, 200, 5000))
+            {
+                C.SpendGilFlashDurationMs = Math.Clamp(C.SpendGilFlashDurationMs, 200, 5000);
+            }
+            ImGui.SetNextItemWidth(350);
+            ImGui.InputText("Alert text", ref C.SpendGilAlertText, 256);
+            ImGui.SetNextItemWidth(350);
+            ImGui.InputText("Alert image path (optional)", ref C.SpendGilAlertImagePath, 512);
+            ImGuiEx.HelpMarker("Use a full file path for image flash.");
+            ImGui.Checkbox("Play sound on spend", ref C.EnableSpendGilSound);
+            if(C.EnableSpendGilSound)
+            {
+                ImGui.SetNextItemWidth(350);
+                ImGui.InputText("Sound path (.wav)", ref C.SpendGilSoundPath, 512);
+                ImGuiEx.HelpMarker("Use full path to a .wav file.");
+            }
+            ImGui.Unindent();
+        }
         ImGuiEx.TextV("Date format:");
         ImGui.SameLine();
         ImGuiEx.RadioButtonBool("Month/Day", "Day.Month", ref C.ReverseDayMonth, sameLine: true, inverted: true);
-
-        ImGui.Separator();
-        ImGui.Checkbox("Show history when trading", ref C.ShowTradeOverlay);
-        ImGui.Indent();
-        ImGui.SetNextItemWidth(150f);
-        ImGui.InputInt("Time, minutes", ref C.LastGilTradesMin);
-        ImGui.Unindent();
 
         ImGui.Separator();
         ImGui.Checkbox("Censor Names", ref C.CensorConfig.Enabled);

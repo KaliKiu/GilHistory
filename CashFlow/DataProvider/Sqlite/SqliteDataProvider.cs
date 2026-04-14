@@ -1,85 +1,45 @@
-﻿using CashFlow.Data;
-using CashFlow.Data.ExplicitStructs;
-using CashFlow.Data.LegacyDescriptors;
-using CashFlow.Data.SqlDescriptors;
+﻿using CashFlow.Data.SqlDescriptors;
 using Dapper;
 using ECommons.ChatMethods;
 using ECommons.GameHelpers;
-using MessagePack;
 using SqlKata.Execution;
+using System.IO;
+using System.Xml.Linq;
 
 namespace CashFlow.DataProvider.Sqlite;
+
 public unsafe class SqliteDataProvider : DataProviderBase
 {
+    private static string GilHistoryDirectory => Path.Combine(Svc.PluginInterface.ConfigDirectory.FullName, "gil-history");
+    private static string GilHistoryXmlFile => Path.Combine(GilHistoryDirectory, "gil-history.xml");
+
     public SqliteDataProvider()
     {
         using var db = new GilsightQueryFactory();
         db.Connection.Execute($"""
                 CREATE TABLE IF NOT EXISTS {Tables.CidMap} (
                     Cid       NUMERIC UNIQUE,
-                    Name      TEXT,
-                    HomeWorld INTEGER
+                    Name      TEXT NOT NULL,
+                    HomeWorld INTEGER NOT NULL
                 );
                 """);
+
         db.Connection.Execute($"""
-                CREATE TABLE IF NOT EXISTS {Tables.Trades} (
-                    Cid      NUMERIC,
-                    Self     NUMERIC,
-                    UnixTime NUMERIC,
-                    Gil      INTEGER,
-                    Items    BLOB
+                CREATE TABLE IF NOT EXISTS {Tables.GilTimelineRecords} (
+                    Id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                    Cid         NUMERIC NOT NULL,
+                    GilPlayer   NUMERIC NOT NULL,
+                    GilRetainer NUMERIC NOT NULL,
+                    UnixTime    NUMERIC NOT NULL
                 );
                 """);
+
         db.Connection.Execute($"""
-                CREATE TABLE IF NOT EXISTS {Tables.RetainerSales} (
-                    Cid       NUMERIC,
-                    RetainerName      TEXT,
-                    Item         INTEGER,
-                    Price        INTEGER,
-                    Quantity     INTEGER,
-                    IsMannequinn INTEGER,
-                    UnixTime         NUMERIC,
-                    Buyer        TEXT
-                );
+                CREATE INDEX IF NOT EXISTS IX_GilTimeline_Cid_UnixTime
+                ON {Tables.GilTimelineRecords} (Cid, UnixTime);
                 """);
-        db.Connection.Execute($"""
-                CREATE TABLE IF NOT EXISTS {Tables.ShopPurchases} (
-                    Cid       NUMERIC,
-                    RetainerName      TEXT,
-                    Item         INTEGER,
-                    Price        INTEGER,
-                    Quantity     INTEGER,
-                    IsMannequinn INTEGER,
-                    UnixTime         NUMERIC
-                );
-                """);
-        db.Connection.Execute($"""
-                CREATE TABLE IF NOT EXISTS {Tables.NpcPurchases} (
-                    Cid       NUMERIC,
-                    Item         INTEGER,
-                    Price        INTEGER,
-                    Quantity     INTEGER,
-                    IsBuyback INTEGER,
-                    UnixTime         NUMERIC
-                );
-                """);
-        db.Connection.Execute($"""
-                CREATE TABLE IF NOT EXISTS {Tables.NpcSales} (
-                    Cid       NUMERIC,
-                    Item         INTEGER,
-                    Price        INTEGER,
-                    Quantity     INTEGER,
-                    UnixTime         NUMERIC
-                );
-                """);
-        db.Connection.Execute($"""
-                CREATE TABLE IF NOT EXISTS {Tables.GilRecords} (
-                    Cid       NUMERIC,
-                    GilPlayer         NUMERIC,
-                    GilRetainer        NUMERIC,
-                    UnixTime         NUMERIC
-                );
-                """);
+
+        EnsureGilHistoryXmlExists();
     }
 
     public override Sender? GetPlayerInfo(ulong CID)
@@ -101,62 +61,8 @@ public unsafe class SqliteDataProvider : DataProviderBase
         S.WorkerThread.ClearAndEnqueue(() =>
         {
             using var db = new GilsightQueryFactory();
-            foreach(var table in (string[])[Tables.Trades, Tables.GilRecords, Tables.NpcSales, Tables.NpcPurchases, Tables.RetainerSales, Tables.ShopPurchases])
-            {
-                var result = db.Query(table).Where("Cid", "=", cidLong).Delete();
-                PluginLog.Information($"Removed {result} entries from {table}");
-            }
-        });
-    }
-
-    public override List<TradeDescriptor> GetTrades(long unixTimeMsMin = 0, long unixTimeMsMax = 0)
-    {
-        var ret = new List<TradeDescriptor>();
-        using var db = new GilsightQueryFactory();
-        var result = db.Query(Tables.Trades);
-        if(unixTimeMsMin > 0) result = result.Where("UnixTime", ">=", unixTimeMsMin);
-        if(unixTimeMsMax > 0) result = result.Where("UnixTime", "<=", unixTimeMsMax);
-        foreach(var x in result.Get())
-        {
-            try
-            {
-                long cid = x.Cid;
-                long self = x.Self;
-                ret.Add(new()
-                {
-                    TradePartnerCID = *(ulong*)&cid,
-                    CidUlong = *(ulong*)&self,
-                    ReceivedGil = (int)x.Gil,
-                    ReceivedItems = x.Items == null ? null : MessagePackSerializer.Deserialize<ItemWithQuantity[]>(x.Items),
-                    UnixTime = x.UnixTime,
-                });
-            }
-            catch(Exception e)
-            {
-                PluginLog.Error($"Error processing record:");
-                e.Log();
-            }
-        }
-        return ret;
-    }
-
-    public override void RecordIncomingTrade(TradeDescriptor descriptor)
-    {
-        var self = Player.CID;
-        if(C.Blacklist.Contains(self)) return;
-        var longSelf = *(long*)&self;
-        S.WorkerThread.Enqueue(() =>
-        {
-            using var db = new GilsightQueryFactory();
-            var cid = descriptor.TradePartnerCID;
-            db.Query(Tables.Trades).Insert([
-                new("Cid", *(long*)&cid),
-                new("Self", longSelf),
-                new("UnixTime", DateTimeOffset.Now.ToUnixTimeMilliseconds()),
-                new("Gil", descriptor.ReceivedGil),
-                new("Items", descriptor.ReceivedItems.Length == 0?null:MessagePackSerializer.Serialize(descriptor.ReceivedItems))
-                ]);
-            S.MainWindow.TabTradeLog.NeedsUpdate = true;
+            var result = db.Query(Tables.GilTimelineRecords).Where("Cid", "=", cidLong).Delete();
+            PluginLog.Information($"Removed {result} entries from {Tables.GilTimelineRecords}");
         });
     }
 
@@ -191,175 +97,62 @@ public unsafe class SqliteDataProvider : DataProviderBase
         return ret;
     }
 
-    public override void RecordRetainerHistory(List<RetainerHistoryData> trades, ulong CID, string retainerName)
-    {
-        if(C.Blacklist.Contains(Player.CID)) return;
-        S.WorkerThread.Enqueue(() =>
-        {
-            var cid = CID;
-            var ret = new Dictionary<ulong, Sender>();
-            using var db = new GilsightQueryFactory();
-            var minTime = trades.Min(x => x.UnixTimeSeconds);
-            var existing = GetRetainerHistory(minTime);
-            //PluginLog.Information($"ExistingCnt: {existing}");
-            foreach(var x in trades)
-            {
-                var desc = new RetainerSaleDescriptor()
-                {
-                    BuyerName = x.BuyerName,
-                    CidUlong = cid,
-                    IsMannequinn = x.IsMannequinn,
-                    ItemID = (int)x.ItemID + (x.IsHQ ? 1000000 : 0),
-                    Price = (int)x.Price,
-                    Quantity = (int)x.Quantity,
-                    RetainerName = retainerName,
-                    UnixTime = x.UnixTimeSeconds * 1000L,
-                };
-                if(!existing.Any(s => s.Equals(desc)))
-                {
-                    /*Cid       NUMERIC,
-                        RetainerName      TEXT,
-                        Item         INTEGER,
-                        Price        INTEGER,
-                        Quantity     INTEGER,
-                        IsMannequinn INTEGER,
-                        UnixTime         NUMERIC,
-                        Buyer        TEXT*/
-                    db.Query(Tables.RetainerSales).Insert([
-                        new("Cid", *(long*)&cid),
-                        new("RetainerName", retainerName),
-                        new("Item", desc.ItemID),
-                        new("Price", desc.Price),
-                        new("Quantity", desc.Quantity),
-                        new("IsMannequinn", desc.IsMannequinn),
-                        new("UnixTime", desc.UnixTime),
-                        new("Buyer", desc.BuyerName),
-                    ]);
-                }
-            }
-        });
-    }
-
-    public override List<RetainerSaleDescriptor> GetRetainerHistory(long unixTimeMsMin = 0, long unixTimeMsMax = 0)
-    {
-        var ret = new List<RetainerSaleDescriptor>();
-        using var db = new GilsightQueryFactory();
-        var result = db.Query(Tables.RetainerSales);
-        if(unixTimeMsMin > 0) result = result.Where("UnixTime", ">=", unixTimeMsMin);
-        if(unixTimeMsMax > 0) result = result.Where("UnixTime", "<=", unixTimeMsMax);
-        var r = result.Get();
-        foreach(var x in r)
-        {
-            try
-            {
-                long cid = x.Cid;
-                /*Cid       NUMERIC,
-                    RetainerName      TEXT,
-                    Item         INTEGER,
-                    Price        INTEGER,
-                    Quantity     INTEGER,
-                    IsMannequinn INTEGER,
-                    UnixTime         NUMERIC,
-                    Buyer        TEXT*/
-                ret.Add(new()
-                {
-                    BuyerName = x.Buyer,
-                    CidUlong = *(ulong*)&cid,
-                    IsMannequinn = x.IsMannequinn == 1,
-                    ItemID = (int)x.Item,
-                    Price = (int)x.Price,
-                    Quantity = (int)x.Quantity,
-                    RetainerName = x.RetainerName,
-                    UnixTime = x.UnixTime,
-                });
-            }
-            catch(Exception e)
-            {
-                PluginLog.Error($"Error processing record:");
-                e.Log();
-            }
-        }
-        return ret;
-    }
-
-    public override void RecordShopPurchase(ShopPurchaseSqlDescriptor shopPurchaseDescriptor)
-    {
-        if(C.Blacklist.Contains(Player.CID)) return;
-        S.WorkerThread.Enqueue(() =>
-        {
-            using var db = new GilsightQueryFactory();
-            db.Query(Tables.ShopPurchases).Insert(shopPurchaseDescriptor);
-        });
-    }
-
-    public override List<ShopPurchaseSqlDescriptor> GetShopPurchases(long unixTimeMsMin = 0, long unixTimeMsMax = 0)
-    {
-        using var db = new GilsightQueryFactory();
-        return [.. db.Query(Tables.ShopPurchases).Get<ShopPurchaseSqlDescriptor>()];
-    }
-
-    public override void RecordNpcPurchase(NpcPurchaseSqlDescriptor npcPurchaseSqlDescriptor)
-    {
-        if(C.Blacklist.Contains(Player.CID)) return;
-        S.WorkerThread.Enqueue(() =>
-        {
-            using var db = new GilsightQueryFactory();
-            db.Query(Tables.NpcPurchases).Insert(npcPurchaseSqlDescriptor);
-        });
-    }
-
-    public override List<NpcPurchaseSqlDescriptor> GetNpcPurchases(long unixTimeMsMin = 0, long unixTimeMsMax = 0)
-    {
-        using var db = new GilsightQueryFactory();
-        var result = db.Query(Tables.NpcPurchases);
-        if(unixTimeMsMin > 0) result = result.Where("UnixTime", ">=", unixTimeMsMin);
-        if(unixTimeMsMax > 0) result = result.Where("UnixTime", "<=", unixTimeMsMax);
-        return [.. result.Get<NpcPurchaseSqlDescriptor>()];
-    }
-
-    public override void RecordNpcSale(NpcSaleSqlDescriptor npcSaleSqlDescriptor)
-    {
-        if(C.Blacklist.Contains(Player.CID)) return;
-        S.WorkerThread.Enqueue(() =>
-        {
-            using var db = new GilsightQueryFactory();
-            db.Query(Tables.NpcSales).Insert(npcSaleSqlDescriptor);
-        });
-    }
-
-    public override List<NpcSaleSqlDescriptor> GetNpcSales(long unixTimeMsMin = 0, long unixTimeMsMax = 0)
-    {
-        using var db = new GilsightQueryFactory();
-        var result = db.Query(Tables.NpcSales);
-        if(unixTimeMsMin > 0) result = result.Where("UnixTime", ">=", unixTimeMsMin);
-        if(unixTimeMsMax > 0) result = result.Where("UnixTime", "<=", unixTimeMsMax);
-        return [.. result.Get<NpcSaleSqlDescriptor>()];
-    }
-
     public override void RecordPlayerGil(GilRecordSqlDescriptor gilRecordSqlDescriptor)
     {
         if(C.Blacklist.Contains(Player.CID)) return;
         S.WorkerThread.Enqueue(() =>
         {
-            var ret = new Dictionary<ulong, Sender>();
             using var db = new GilsightQueryFactory();
-            var now = DateTimeOffset.Now.ToLocalTime();
-            var purgeAfter = new DateTimeOffset(now.Year, now.Month, now.Day, 0, 0, 0, now.Offset);
-            db.Query(Tables.GilRecords)
-            .Where("UnixTime", ">=", purgeAfter.ToUnixTimeMilliseconds())
-            .Where("Cid", "=", Player.CID)
-            .Delete();
-            db.Query(Tables.GilRecords).Insert(gilRecordSqlDescriptor);
+            db.Query(Tables.GilTimelineRecords).Insert(new GilRecordSqlDescriptor
+            {
+                CidUlong = gilRecordSqlDescriptor.CidUlong,
+                GilPlayer = Math.Max(0, gilRecordSqlDescriptor.GilPlayer),
+                GilRetainer = Math.Max(0, gilRecordSqlDescriptor.GilRetainer),
+                UnixTime = gilRecordSqlDescriptor.UnixTime
+            });
+            SaveGilRecordToXml(gilRecordSqlDescriptor);
             S.MainWindow.UpdateData(false);
         });
     }
 
-    public override List<GilRecordSqlDescriptor> GetGilRecords(long unixTimeMsMin = 0, long unixTimeMsMax = 0)
+    public override List<GilRecordSqlDescriptor> GetGilTimelineRecords(long unixTimeMsMin = 0, long unixTimeMsMax = 0)
     {
         using var db = new GilsightQueryFactory();
-        var result = db.Query(Tables.GilRecords);
+        var result = db.Query(Tables.GilTimelineRecords);
         if(unixTimeMsMin > 0) result = result.Where("UnixTime", ">=", unixTimeMsMin);
         if(unixTimeMsMax > 0) result = result.Where("UnixTime", "<=", unixTimeMsMax);
+        result = result.OrderBy("UnixTime");
         return [.. result.Get<GilRecordSqlDescriptor>()];
+    }
+
+    private static void EnsureGilHistoryXmlExists()
+    {
+        Directory.CreateDirectory(GilHistoryDirectory);
+        if(File.Exists(GilHistoryXmlFile)) return;
+
+        var doc = new XDocument(new XElement("GilHistory"));
+        doc.Save(GilHistoryXmlFile);
+    }
+
+    private static void SaveGilRecordToXml(GilRecordSqlDescriptor record)
+    {
+        EnsureGilHistoryXmlExists();
+        var doc = XDocument.Load(GilHistoryXmlFile);
+        var root = doc.Root;
+        if(root == null)
+        {
+            root = new XElement("GilHistory");
+            doc.Add(root);
+        }
+
+        root.Add(new XElement("Entry",
+            new XAttribute("cid", $"{record.CidUlong:X16}"),
+            new XAttribute("gilPlayer", Math.Max(0, record.GilPlayer)),
+            new XAttribute("gilRetainer", Math.Max(0, record.GilRetainer)),
+            new XAttribute("totalGil", Math.Max(0, record.GilPlayer) + Math.Max(0, record.GilRetainer)),
+            new XAttribute("unixTimeMs", record.UnixTime),
+            new XAttribute("localTime", DateTimeOffset.FromUnixTimeMilliseconds(record.UnixTime).ToLocalTime().ToString("O"))
+        ));
+        doc.Save(GilHistoryXmlFile);
     }
 }

@@ -59,6 +59,12 @@
           "dapper": "2.0.123"
         }
       },
+      "System.Windows.Extensions": {
+        "type": "Direct",
+        "requested": "[10.0.6, )",
+        "resolved": "10.0.6",
+        "contentHash": "nQIasVqMZc+tMB+CDj5dzd9QlVJSx1V7KEEoHQQpifrO5ug2r1LEGKkgK7g22tNFKRVIZ97nH698bedTSUavNw=="
+      },
       "Dapper": {
         "type": "Transitive",
         "resolved": "2.0.123",
@@ -127,6 +133,12 @@
       }
     },
     "net10.0-windows7.0/win-x64": {
+      "System.Windows.Extensions": {
+        "type": "Direct",
+        "requested": "[10.0.6, )",
+        "resolved": "10.0.6",
+        "contentHash": "nQIasVqMZc+tMB+CDj5dzd9QlVJSx1V7KEEoHQQpifrO5ug2r1LEGKkgK7g22tNFKRVIZ97nH698bedTSUavNw=="
+      },
       "SQLitePCLRaw.lib.e_sqlite3": {
         "type": "Transitive",
         "resolved": "2.1.11",

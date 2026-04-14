@@ -2,10 +2,5 @@
 public static unsafe class Tables
 {
     public static readonly string CidMap = "CidMap";
-    public static readonly string NpcSales = "NpcSales";
-    public static readonly string NpcPurchases = "NpcPurchases";
-    public static readonly string ShopPurchases = "ShopPurchases";
-    public static readonly string RetainerSales = "RetainerSales";
-    public static readonly string Trades = "Trades";
-    public static readonly string GilRecords = "GilRecords";
+    public static readonly string GilTimelineRecords = "GilTimelineRecords";
 }
